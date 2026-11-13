@@ -19,6 +19,74 @@ except (ImportError, ValueError):
     from exporter import export_to_csv, export_to_txt
 
 
+class ColumnSelectorDialog(tk.Toplevel):
+    """Modal dialog allowing user to choose which columns to export."""
+
+    def __init__(self, parent, available_columns, on_confirm, title="Select Columns to Export"):
+        super().__init__(parent)
+        self.available_columns = available_columns
+        self.on_confirm = on_confirm
+        self.title(title)
+        self.geometry("380x480")
+        self.minsize(320, 380)
+        self.transient(parent)
+        self.grab_set()
+
+        self.check_vars = {}
+        self._build_ui()
+        self._center()
+
+    def _center(self):
+        self.update_idletasks()
+        w = self.winfo_width()
+        h = self.winfo_height()
+        x = (self.winfo_screenwidth() // 2) - (w // 2)
+        y = (self.winfo_screenheight() // 2) - (h // 2)
+        self.geometry(f"+{x}+{y}")
+
+    def _build_ui(self):
+        frame = ttk.Frame(self, padding="15")
+        frame.pack(fill=tk.BOTH, expand=True)
+
+        ttk.Label(frame, text="Select Columns to Export", font=("Segoe UI", 11, "bold")).pack(anchor="w")
+        ttk.Label(frame, text="Choose which fields to include in your output file:", font=("Segoe UI", 9), foreground="#64748b").pack(anchor="w", pady=(2, 10))
+
+        sel_row = ttk.Frame(frame)
+        sel_row.pack(fill=tk.X, pady=(0, 8))
+        ttk.Button(sel_row, text="Select All", command=self._select_all).pack(side=tk.LEFT, padx=(0, 6))
+        ttk.Button(sel_row, text="Deselect All", command=self._deselect_all).pack(side=tk.LEFT)
+
+        cols_frame = ttk.Frame(frame, padding="6", relief=tk.GROOVE)
+        cols_frame.pack(fill=tk.BOTH, expand=True, pady=(0, 15))
+
+        for col in self.available_columns:
+            var = tk.BooleanVar(value=True)
+            self.check_vars[col] = var
+            cb = ttk.Checkbutton(cols_frame, text=col, variable=var)
+            cb.pack(anchor="w", pady=2, padx=4)
+
+        btn_frame = ttk.Frame(frame)
+        btn_frame.pack(fill=tk.X)
+        ttk.Button(btn_frame, text="Export Now", style="Accent.TButton", command=self._confirm).pack(side=tk.RIGHT, padx=4)
+        ttk.Button(btn_frame, text="Cancel", command=self.destroy).pack(side=tk.RIGHT)
+
+    def _select_all(self):
+        for v in self.check_vars.values():
+            v.set(True)
+
+    def _deselect_all(self):
+        for v in self.check_vars.values():
+            v.set(False)
+
+    def _confirm(self):
+        chosen = [col for col, var in self.check_vars.items() if var.get()]
+        if not chosen:
+            messagebox.showwarning("No Columns", "Please select at least one column to export.", parent=self)
+            return
+        self.destroy()
+        self.on_confirm(chosen)
+
+
 class EditBusinessDialog(tk.Toplevel):
     """Modal dialog to edit or create a business record."""
 
@@ -585,44 +653,54 @@ class GoogleMapsScraperApp:
             messagebox.showwarning("No Data", "There are no listings to export. Please scrape or add records first.")
             return
 
-        default_name = f"google_maps_{self._sanitize_filename(self.current_query or 'results')}.csv"
-        filepath = filedialog.asksaveasfilename(
-            parent=self.root,
-            title="Export Records to CSV",
-            initialfile=default_name,
-            filetypes=[("CSV Files", "*.csv"), ("All Files", "*.*")]
-        )
-        if not filepath:
-            return
+        cols = ["Index", "Name", "Phone", "Website", "Rating", "Reviews", "Category", "Address", "Hours", "Google Maps URL", "Notes"]
 
-        try:
-            export_to_csv(self.records, filepath)
-            messagebox.showinfo("Export Successful", f"Successfully exported {len(self.records)} listings to:\n{filepath}")
-            self.status_lbl.config(text=f"Exported to CSV: {os.path.basename(filepath)}")
-        except Exception as e:
-            messagebox.showerror("Export Failed", f"Failed to export CSV:\n{e}")
+        def on_columns_chosen(selected_cols):
+            default_name = f"google_maps_{self._sanitize_filename(self.current_query or 'results')}.csv"
+            filepath = filedialog.asksaveasfilename(
+                parent=self.root,
+                title="Export Records to CSV",
+                initialfile=default_name,
+                filetypes=[("CSV Files", "*.csv"), ("All Files", "*.*")]
+            )
+            if not filepath:
+                return
+
+            try:
+                export_to_csv(self.records, filepath, selected_columns=selected_cols)
+                messagebox.showinfo("Export Successful", f"Successfully exported {len(self.records)} listings ({len(selected_cols)} columns) to:\n{filepath}")
+                self.status_lbl.config(text=f"Exported to CSV ({len(selected_cols)} cols): {os.path.basename(filepath)}")
+            except Exception as e:
+                messagebox.showerror("Export Failed", f"Failed to export CSV:\n{e}")
+
+        ColumnSelectorDialog(self.root, cols, on_columns_chosen, title="Select Columns for CSV Export")
 
     def _export_txt(self):
         if not self.records:
             messagebox.showwarning("No Data", "There are no listings to export. Please scrape or add records first.")
             return
 
-        default_name = f"google_maps_{self._sanitize_filename(self.current_query or 'results')}.txt"
-        filepath = filedialog.asksaveasfilename(
-            parent=self.root,
-            title="Export Records to TXT Report",
-            initialfile=default_name,
-            filetypes=[("Text Files", "*.txt"), ("All Files", "*.*")]
-        )
-        if not filepath:
-            return
+        cols = ["Name", "Phone", "Website", "Rating", "Category", "Address", "Hours", "Google Maps URL", "Notes"]
 
-        try:
-            export_to_txt(self.records, filepath, keyword=self.current_query)
-            messagebox.showinfo("Export Successful", f"Successfully exported {len(self.records)} listings to:\n{filepath}")
-            self.status_lbl.config(text=f"Exported to TXT: {os.path.basename(filepath)}")
-        except Exception as e:
-            messagebox.showerror("Export Failed", f"Failed to export TXT:\n{e}")
+        def on_columns_chosen(selected_cols):
+            default_name = f"google_maps_{self._sanitize_filename(self.current_query or 'results')}.txt"
+            filepath = filedialog.asksaveasfilename(
+                parent=self.root,
+                title="Export Records to TXT Report",
+                initialfile=default_name,
+                filetypes=[("Text Files", "*.txt"), ("All Files", "*.*")]
+            )
+            if not filepath:
+                return
+
+            try:
+                export_to_txt(self.records, filepath, keyword=self.current_query, selected_columns=selected_cols)
+                messagebox.showinfo("Export Successful", f"Successfully exported {len(self.records)} listings to:\n{filepath}")
+                self.status_lbl.config(text=f"Exported to TXT ({len(selected_cols)} cols): {os.path.basename(filepath)}")
+            except Exception as e:
+                messagebox.showerror("Export Failed", f"Failed to export TXT:\n{e}")
+
+        ColumnSelectorDialog(self.root, cols, on_columns_chosen, title="Select Columns for TXT Export")
 
     @staticmethod
     def _sanitize_filename(name: str) -> str:

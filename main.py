@@ -109,21 +109,33 @@ def main():
         )
         target_os = "windows" if chosen_os_idx == 0 else "linux"
 
-    # 2. Ask Mode (CLI or GUI) if not provided
+    # 2. Ask Mode (CLI, GUI, or Install Dependencies) if not provided
     if not target_mode:
         mode_options = [
             "GUI (Desktop Dashboard Window)",
-            "CLI (Command Line Terminal)"
+            "CLI (Command Line Terminal)",
+            "📦 Install / Verify Dependencies (Tool Requirements)"
         ]
         chosen_mode_idx = ask_choice(
-            "[?] Step 2: Select Interface Mode:",
+            "[?] Step 2: Select Action:",
             mode_options,
             default_index=0
         )
-        target_mode = "gui" if chosen_mode_idx == 0 else "cli"
+        if chosen_mode_idx == 0:
+            target_mode = "gui"
+        elif chosen_mode_idx == 1:
+            target_mode = "cli"
+        else:
+            target_mode = "install"
 
     # 3. Launch according to instructions
-    if target_os.startswith("win"):
+    if target_mode == "install":
+        args_to_pass = ["install"] + (remaining_args if remaining_args else ["all"])
+        if target_os.startswith("win"):
+            launch_windows("cli", args_to_pass)
+        else:
+            launch_linux("cli", args_to_pass)
+    elif target_os.startswith("win"):
         launch_windows(target_mode, remaining_args if target_mode == "cli" else None)
     else:
         launch_linux(target_mode, remaining_args if target_mode == "cli" else None)
